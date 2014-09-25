@@ -50,12 +50,13 @@ class LinkChecker
   # @param uri [URI] A URI object for the target URL.
   # @return [LinkChecker::Result] One of the following objects: {LinkChecker::Good},
   #   {LinkChecker::Redirect}, or {LinkChecker::Error}.
-  def self.check_uri(uri, redirected=false)
+  def self.check_uri(uri, redirected = false)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true if uri.scheme == "https"
     http.start do
       path = (uri.path.empty?) ? '/' : uri.path
       http.request_get(path) do |response|
+        http.finish
         case response
         when Net::HTTPSuccess then
           if redirected
@@ -132,7 +133,7 @@ class LinkChecker
     threads = []
     html_file_paths.each do |file|
       wait_to_spawn_thread
-      threads << check_page(open(file), file)
+      threads << check_page(File.open(file, 'r:utf-8', &:read), file)
       @html_files << file
     end
     threads.each{|thread| thread.join }
@@ -158,14 +159,15 @@ class LinkChecker
             response.uri_string = uri_string
             Thread.exclusive { results << response }
           rescue => error
-            Thread.exclusive { results <<
-              Error.new( :error => error.to_s, :uri_string => uri_string) }
+            Thread.exclusive {
+              results << Error.new( :error => error.to_s, :uri_string => uri_string)
+            }
           end
         end
       end
       threads.each {|thread| thread.join }
       report_results(page_name, results)
-    end
+    end.value
   end
   
   # Report the results of scanning one HTML page.
